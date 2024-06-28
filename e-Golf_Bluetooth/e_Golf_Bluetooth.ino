@@ -1,4 +1,4 @@
-//DEV by Manuel
+//MANUEL833
 
 #include "BluetoothSerial.h"
 #include "ELMduino.h"
@@ -60,7 +60,7 @@ void setup() {
     tft.drawString("Verbinde mit OBD-II", 10, 10, 4);
     tft.setTextColor(TFT_ORANGE);
     tft.setTextSize(1);
-    tft.drawString("Herzog", 35, 45, 4);
+    tft.drawString("Manuel833", 35, 45, 4);
     tft.setTextSize(1);
     tft.setTextColor(TFT_ORANGE);
     tft.drawString("Version", 70, 80, 4);
