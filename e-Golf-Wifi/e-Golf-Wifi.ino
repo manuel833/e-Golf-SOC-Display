@@ -1,11 +1,13 @@
+MANUEL833
+
 #include <WiFi.h>
 #include "ELMduino.h"
 #include <TFT_eSPI.h>
 #include <SPI.h>
 #include "golf.h"
 
-const char* ssid = "WIFI_OBDII"; 
-const char* password = "your-password";
+const char* ssid = "WIFI_OBDII"; //WIFI name of the OBDII Dongle
+const char* password = "your-password"; //WIFI password of the OBDII Dongle
 
 
 // Define button pins
@@ -62,11 +64,11 @@ void setup()
     tft.drawString("Verbinde mit OBD-II", 10, 10, 4);
     tft.setTextColor(TFT_ORANGE);
     tft.setTextSize(1);
-    tft.drawString("MH-Electronics", 35, 45, 4);
+    tft.drawString("Manuel833", 35, 45, 4);
     tft.setTextSize(1);
     tft.setTextColor(TFT_ORANGE);
     tft.drawString("Version", 70, 80, 4);
-    tft.drawString("1.0", 95, 100, 4);
+    tft.drawString("1.1", 95, 100, 4);
 
     // Initialize buttons
     pinMode(BUTTON1PIN, INPUT_PULLUP);
