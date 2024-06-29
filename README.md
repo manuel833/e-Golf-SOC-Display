@@ -3,6 +3,7 @@
 
 This project provides a real-time display of the battery percentage for the Volkswagen e-Golf and e-Up electric vehicles.
 
+
 ## Features
 - WIFI or Bluetooth Dongle
 - Real-time battery percentage display
@@ -26,9 +27,15 @@ If you find this project useful, you can support its development:
 ### Requirements
 
 - Arduino IDE
-- Libraries: `ELMduino.h`, `TFT_eSPI`, `BluetoothSerial`,`WIFI`
-- ELM327 Bluetooth or WIFI OBDII adapter
-- [TTGO LoRa32-OLED ESP](https://www.amazon.de/gp/product/B09FYY8PBH/ref=ppx_yo_dt_b_search_asin_title?ie=UTF8&psc=1)
+- Libraries: `ELMduino.h`, `TFT_eSPI.h`, `BluetoothSerial.h`,`WIFI.h`
+- [Bluetooth ELM327 OBDII adapter](https://amzn.to/4eJq7Wn)
+- [WIFI ELM327 OBDII adapter](https://amzn.to/3XIxXJQ)
+- [TTGO LoRa32-OLED ESP](https://amzn.to/3ROV4ip)
+
+### ELMduino.h
+This is a simple yet powerful library to effortlessly interface your Arduino with an ELM327 OBD-II scanner. With this library, you can query any and all OBD-II supported PIDs to collect a wide variety of car data (i.e. speed, rpm, engine temp, etc). Also, you can use ELMduino to view and clear your car's trouble codes - no need to go to AutoZone anymore!
+
+[ELMduino github](https://github.com/PowerBroker2/ELMduino)
 
 ### Steps
 
@@ -37,13 +44,17 @@ If you find this project useful, you can support its development:
    git clone https://github.com/manuel833/e-Golf-SOC-Display.git
    ```
 
-2. Make the following changes in the code:
+2. Make the following changes in the code Bluetooth Version:
    ```cpp
    const char* DEVICE_NAME = "Golf"; // Gerätenamen des ESP
    const char* OBDII_NAME = "OBDII"; // OBDII Namen
    const char* BLUETOOTH_PIN = "1234"; // OBDII Bluetooth pin
    ```
-
+2.1. Make the following changes in the code WIFI version:
+   ```cpp
+   const char* ssid = "WIFI_OBDII"; //WIFI name of the OBDII Dongle
+   const char* password = "your-password"; //WIFI password of the OBDII Dongle
+   ```
 3. Open the Arduino IDE and install the required libraries:
    - Go to **Sketch** -> **Include Library** -> **Manage Libraries...**
    - Search for `ELMduino` and install it
