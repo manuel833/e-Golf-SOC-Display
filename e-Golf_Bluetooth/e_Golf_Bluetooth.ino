@@ -1,4 +1,4 @@
-//MANUEL833
+//DEV by Manuel
 
 #include "BluetoothSerial.h"
 #include "ELMduino.h"
@@ -25,12 +25,16 @@ const char* BLUETOOTH_PIN = "1234"; //OBDII Bluetooth pin
 TFT_eSPI tft = TFT_eSPI();  // Invoke custom library
 ELM327 myELM327;
 
-uint32_t pid = 0x028C; // PID for SoC
+uint32_t pidSoC = 0x028C; // PID for SoC
+uint32_t pidTemp = 0x2A0B; // PID for Battery Temperature
 uint8_t service = 0x22; // "Show current data" Service
 uint8_t num_responses = 1; // Number of expected responses
-uint8_t numExpectedBytes = 2; // Number of expected bytes in response
-float scaleFactor = 1.0; // Scaling factor for response
-float bias = 0.0; // Bias for response
+uint8_t numExpectedBytesSoC = 2; // Number of expected bytes in response for SoC
+uint8_t numExpectedBytesTemp = 2; // Number of expected bytes in response for Temperature
+float scaleFactorSoC = 1.0; // Scaling factor for SoC response
+float scaleFactorTemp = 1.0; // Scaling factor for Temp response
+float biasSoC = 0.0; // Bias for SoC response
+float biasTemp = 0.0; // Bias for Temp response
 
 void setup() {
     // Initialize the hardware, the BMA423 sensor has been initialized internally
@@ -77,9 +81,20 @@ void setup() {
     pinMode(LED_BUILTIN, OUTPUT);
     digitalWrite(LED_BUILTIN, LOW);
 #endif
-
     DEBUG_PORT.begin(38400);
-    SerialBT.setPin(BLUETOOTH_PIN);
+
+    // Secure Simple Pairing (SSP) aktivieren
+    SerialBT.enableSSP();
+
+    // Bluetooth starten
+    if (!SerialBT.begin(DEVICE_NAME)) {
+        DEBUG_PORT.println("An error occurred initializing Bluetooth");
+    } else {
+        DEBUG_PORT.println("Bluetooth initialized successfully");
+    }
+
+    DEBUG_PORT.println("The device started, now you can pair it with Bluetooth!");
+
     ELM_PORT.begin(DEVICE_NAME, true);
 
     // Attempt to connect to OBD scanner
@@ -116,17 +131,20 @@ void setup() {
 }
 
 void loop() {
-
-
     // Button logic for rotating the display
-    static int rotation = 1; // Variable
-    // Variable to store the current rotation
+    static int rotation = 1; // Variable to store the current rotation
     if (digitalRead(BUTTON1PIN) == LOW) {
-        tft.fillScreen(TFT_BLACK); // Löscht den Bildschirm vor dem Drehen
+        tft.fillScreen(TFT_BLACK); // Clear screen before rotating
 
         rotation = (rotation + 1) % 4; // Increase rotation
         tft.setRotation(rotation); // Update display rotation
         delay(500); // Short delay to prevent multiple triggers
+
+        // Re-display static text after rotation
+        tft.setTextColor(TFT_WHITE);
+        tft.setTextSize(1);
+        tft.drawString("SOC: ", 10, 20, 4);
+        tft.drawString("Temp: ", 10, 60, 4);
     }
 
     // Button logic for turning the display on/off
@@ -134,56 +152,52 @@ void loop() {
     if (digitalRead(BUTTON2PIN) == LOW) {
         if (displayOn) {
             tft.writecommand(TFT_DISPOFF); // Turn off display
-            digitalWrite(BACKLIGHT_PIN, LOW); // Schaltet die Hintergrundbeleuchtung aus
+            digitalWrite(BACKLIGHT_PIN, LOW); // Turn off backlight
             displayOn = false;
         } else {
             tft.writecommand(TFT_DISPON); // Turn on display
-            digitalWrite(BACKLIGHT_PIN, HIGH); // Schaltet die Hintergrundbeleuchtung ein
+            digitalWrite(BACKLIGHT_PIN, HIGH); // Turn on backlight
             displayOn = true;
         }
         delay(500); // Short delay to prevent multiple triggers
     }
 
+    // Read SoC value
+    float soc = myELM327.processPID(service, pidSoC, num_responses, numExpectedBytesSoC, scaleFactorSoC, biasSoC);
+    if (myELM327.nb_rx_state == ELM_SUCCESS) {
+        // Read the response byte and process SoC value
+        uint8_t responseByte_0 = myELM327.responseByte_0;
+        soc = (responseByte_0 - 16) / 2.25;
 
+        // Update SoC value on display
+        tft.fillRect(80, 20, 200, 30, TFT_BLACK); // Clear the area where the value will be displayed
+        tft.setTextColor(TFT_WHITE);
+        tft.setTextSize(4); // Adjust text size as needed
+        tft.setCursor(80, 20); // Set cursor for value
+        tft.printf("%.1f%%", soc); // Display result with 1 decimal place
+    } else if (myELM327.nb_rx_state != ELM_GETTING_MSG) {
+        // Error handling
+        Serial.println("Fehler beim Abrufen des SoC");
+    }
 
+    // Read Battery Temperature
+    float batteryTemp = myELM327.processPID(service, pidTemp, num_responses, numExpectedBytesTemp, scaleFactorTemp, biasTemp);
+    if (myELM327.nb_rx_state == ELM_SUCCESS) {
+        // Extract response bytes for temperature
+        uint8_t responseByte_0 = myELM327.responseByte_0;
+        uint8_t responseByte_1 = myELM327.responseByte_1;
+        batteryTemp = ((responseByte_0 * 256) + responseByte_1) / 64.0;
 
-  uint8_t responseByte_0 = 0; 
-    
-  float soc = myELM327.processPID(service, pid, num_responses, numExpectedBytes, scaleFactor, bias);
-if (myELM327.nb_rx_state == ELM_SUCCESS)
-{
+        // Update temperature value on display
+        tft.fillRect(80, 60, 200, 30, TFT_BLACK); // Clear the area where the value will be displayed
+        tft.setTextColor(TFT_WHITE);
+        tft.setTextSize(4); // Adjust text size as needed
+        tft.setCursor(80, 60); // Set cursor for value
+        tft.printf("%.1f C", batteryTemp); // Display result with 1 decimal place
+    } else if (myELM327.nb_rx_state != ELM_GETTING_MSG) {
+        // Error handling
+        Serial.println("Fehler beim Abrufen der Batterietemperatur");
+    }
 
-
-    // Auslesen des Wertes von responseByte_0
-    uint8_t responseByte_0 = myELM327.responseByte_0;
-    Serial.print("Original responseByte_0: ");
-    Serial.println(responseByte_0, HEX); // Zeigt den originalen Wert von responseByte_0 in Hexadezimal an
-
-    // Manipulation des Wertes
-    float soc = (responseByte_0 - 16) / 2.25;
-    Serial.print("Modifizierter Wert: ");
-    Serial.println(soc);
-
-    tft.fillRect(80, 10, 200, 80, TFT_BLACK); // Breite und Höhe anpassen
-    tft.setTextSize(2); // Textgröße 
-    tft.setCursor(80, 10); // Cursor für die Zeile setzen
-    tft.printf("%.1f%%", soc); // Zeigt das Ergebnis mit 1 Dezimalstellen
-
-   }
-  else if (myELM327.nb_rx_state != ELM_GETTING_MSG)
-      {
-    // Fehlerbehandlung
-    Serial.println("Fehler beim Abrufen des SoC");
-  }
-
-  delay(200); // Delay between reads
-
-       // Ergebnis auf dem TFT-Display anzeigen
-       tft.setTextColor(TFT_WHITE); // Textfarbe setzen
-       tft.setTextSize(1); // Textgröße 
-       tft.setCursor(10, 10); // Cursor setzen
-       tft.drawString("SOC: ",  10, 20, 4);
-
-
-
-} 
+    delay(200); // Delay between reads
+}
