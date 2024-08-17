@@ -24,10 +24,14 @@ If you find this project useful, you can support its development:
 
 ## Installation
 
-### Requirements
 
+### ⚠️ Attention ⚠️
+
+**You need version 2.0.17 of the `arduino-esp32` library from ESPressif.** If you use any other version, the project **will not work**! 😬
+
+### Requirements
 - Arduino IDE
-- Libraries: `ELMduino.h`, `TFT_eSPI.h`, `BluetoothSerial.h`,`WIFI.h`
+- Libraries: `ELMduino.h`, `TFT_eSPI.h`, `WIFI.h`
 - [Bluetooth ELM327 OBDII adapter](https://amzn.to/4eJq7Wn)
 - [WIFI ELM327 OBDII adapter](https://amzn.to/3XIxXJQ)
 - [TTGO LoRa32-OLED ESP](https://amzn.to/3ROV4ip)
