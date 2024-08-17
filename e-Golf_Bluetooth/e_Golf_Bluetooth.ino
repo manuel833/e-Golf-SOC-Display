@@ -1,4 +1,5 @@
 //DEV by Manuel
+//Version 1.2
 
 #include "BluetoothSerial.h"
 #include "ELMduino.h"
@@ -68,7 +69,7 @@ void setup() {
     tft.setTextSize(1);
     tft.setTextColor(TFT_ORANGE);
     tft.drawString("Version", 70, 80, 4);
-    tft.drawString("1.1", 95, 100, 4);
+    tft.drawString("1.2", 95, 100, 4);
 
     // Initialize buttons
     pinMode(BUTTON1PIN, INPUT_PULLUP);
@@ -81,20 +82,9 @@ void setup() {
     pinMode(LED_BUILTIN, OUTPUT);
     digitalWrite(LED_BUILTIN, LOW);
 #endif
+
     DEBUG_PORT.begin(38400);
-
-    // Secure Simple Pairing (SSP) aktivieren
-    SerialBT.enableSSP();
-
-    // Bluetooth starten
-    if (!SerialBT.begin(DEVICE_NAME)) {
-        DEBUG_PORT.println("An error occurred initializing Bluetooth");
-    } else {
-        DEBUG_PORT.println("Bluetooth initialized successfully");
-    }
-
-    DEBUG_PORT.println("The device started, now you can pair it with Bluetooth!");
-
+    SerialBT.setPin(BLUETOOTH_PIN);
     ELM_PORT.begin(DEVICE_NAME, true);
 
     // Attempt to connect to OBD scanner
