@@ -40,6 +40,7 @@ float biasTemp = 0.0; // Bias for Temp response
 void setup() {
     // Initialize the hardware, the BMA423 sensor has been initialized internally
     tft.init();
+    Serial.println("TFT initialized");
 
     // Set rotation
     tft.setRotation(1);
@@ -65,7 +66,7 @@ void setup() {
     tft.drawString("Verbinde mit OBD-II", 10, 10, 4);
     tft.setTextColor(TFT_ORANGE);
     tft.setTextSize(1);
-    tft.drawString("Manuel833", 35, 45, 4);
+    tft.drawString("Manuel833", 50, 45, 4);
     tft.setTextSize(1);
     tft.setTextColor(TFT_ORANGE);
     tft.drawString("Version", 70, 80, 4);
@@ -87,9 +88,25 @@ void setup() {
     SerialBT.setPin(BLUETOOTH_PIN);
     ELM_PORT.begin(DEVICE_NAME, true);
 
-    // Attempt to connect to OBD scanner
-    if (!ELM_PORT.connect(OBDII_NAME)) {
-        DEBUG_PORT.println("Couldn't connect to OBD scanner - Phase 1");
+    // Verbindung mit OBD-II Adapter
+    bool connected = false;
+    for (int i = 0; i < 3; i++) {  // 3 Verbindungsversuche
+        if (ELM_PORT.connect(OBDII_NAME)) {
+            connected = true;
+            break;
+        } else {
+            DEBUG_PORT.println("Verbindungsversuch mit OBD-II Adapter fehlgeschlagen, versuche erneut...");
+            tft.pushImage(0, 0, 275, 183, golf);
+            tft.setTextColor(TFT_RED);
+            tft.drawString("FEHLER", 10, 10, 4);
+            tft.drawString("OBDII Verbindung ", 10, 45, 4);
+            tft.drawString("Versuche erneut ", 10, 80, 4);
+            delay(2000);  // Warte 2 Sekunden vor erneutem Versuch
+        }
+    }
+
+    if (!connected) {
+        DEBUG_PORT.println("Konnte keine Verbindung mit dem OBD-II Adapter herstellen - Phase 1");
         tft.pushImage(0, 0, 275, 183, golf);
         tft.setTextColor(TFT_RED);
         tft.drawString("FEHLER 1", 10, 10, 4);
@@ -98,7 +115,7 @@ void setup() {
     }
 
     if (!myELM327.begin(ELM_PORT, true, 2000)) {
-        Serial.println("Couldn't connect to OBD scanner - Phase 2");
+        Serial.println("Konnte keine Verbindung mit dem OBD-II Scanner herstellen - Phase 2");
         tft.pushImage(0, 0, 275, 183, golf);
         tft.setTextColor(TFT_RED);
         tft.drawString("FEHLER 2", 10, 10, 4);
@@ -162,7 +179,7 @@ void loop() {
         // Update SoC value on display
         tft.fillRect(80, 20, 200, 30, TFT_BLACK); // Clear the area where the value will be displayed
         tft.setTextColor(TFT_WHITE);
-        tft.setTextSize(4); // Adjust text size as needed
+        tft.setTextSize(1); // Adjust text size as needed
         tft.setCursor(80, 20); // Set cursor for value
         tft.printf("%.1f%%", soc); // Display result with 1 decimal place
     } else if (myELM327.nb_rx_state != ELM_GETTING_MSG) {
@@ -181,7 +198,7 @@ void loop() {
         // Update temperature value on display
         tft.fillRect(80, 60, 200, 30, TFT_BLACK); // Clear the area where the value will be displayed
         tft.setTextColor(TFT_WHITE);
-        tft.setTextSize(4); // Adjust text size as needed
+        tft.setTextSize(1); // Adjust text size as needed
         tft.setCursor(80, 60); // Set cursor for value
         tft.printf("%.1f C", batteryTemp); // Display result with 1 decimal place
     } else if (myELM327.nb_rx_state != ELM_GETTING_MSG) {
