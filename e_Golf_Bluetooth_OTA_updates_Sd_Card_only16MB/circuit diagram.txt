@@ -1,0 +1,4 @@
+VCC (DFPlayer Mini) -> 5V (ESP32 TTGO T-Display)
+GND (DFPlayer Mini) -> GND (ESP32 TTGO T-Display)
+RX (DFPlayer Mini) -> GPIO 26 (ESP32 TTGO T-Display)
+TX (DFPlayer Mini) -> GPIO 25 (ESP32 TTGO T-Display)
