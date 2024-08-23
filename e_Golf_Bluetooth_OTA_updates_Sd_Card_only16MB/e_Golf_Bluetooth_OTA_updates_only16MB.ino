@@ -5,35 +5,32 @@
 #include "ELMduino.h"
 #include <TFT_eSPI.h>
 #include <SPI.h>
-#include "FS.h"
-#include <SD.h>
 #include <WiFi.h>
 #include <ESPAsyncWebServer.h>
-#include <Preferences.h>
-
-// SD-Karten Pin-Definition (je nach Ihrem Setup anpassen)
-const int chipSelect = 5;
-File golfImageFile;
+#include "golf.h"
 
 // Bluetooth und OBD-II
 BluetoothSerial SerialBT;
 #define ELM_PORT   SerialBT
 #define DEBUG_PORT Serial
 
-// Variablen zum Speichern der Konfigurationsdaten
-String DEVICE_NAME;
-String OBDII_NAME;
-String BLUETOOTH_PIN;
-int BUTTON1PIN;
-int BUTTON2PIN;
-int BACKLIGHT_PIN;
-String WIFI_SSID;
-String WIFI_PASSWORD;
+// Define
+const char* DEVICE_NAME = "Golf"; // Gerätename des ESP
+const char* OBDII_NAME = "OBDII"; // OBDII Name
+const char* BLUETOOTH_PIN = "1234"; // OBDII Bluetooth-Pin
+const char* WIFI_SSID = "ESP32_HOTSPOT"; // Access Point SSID
+const char* WIFI_PASSWORD = "12345678"; // Access Point Passwort
 
-// TFT und OBD-II
+// Define button pins
+#define BUTTON1PIN 35 // Pin for the rotate button
+#define BUTTON2PIN 0  // Pin for the on/off button
+#define BACKLIGHT_PIN 4  // Hintergrundbeleuchtung
+
+// Use hardware SPI
 TFT_eSPI tft = TFT_eSPI();  // Invoke custom library
 ELM327 myELM327;
 
+// PIDs und Service
 uint32_t pidSoC = 0x028C; // PID for SoC
 uint32_t pidTemp = 0x2A0B; // PID for Battery Temperature
 uint8_t service = 0x22; // "Show current data" Service
@@ -45,153 +42,71 @@ float scaleFactorTemp = 1.0; // Scaling factor for Temp response
 float biasSoC = 0.0; // Bias for SoC response
 float biasTemp = 0.0; // Bias for Temp response
 
-// WiFi and WebServer variables
+// WiFi and WebServer
 AsyncWebServer server(80);
-Preferences preferences;
 
 void setup() {
-    Serial.begin(115200);
-
-    if (!SD.begin(chipSelect)) {
-        Serial.println("SD-Karte konnte nicht initialisiert werden.");
-        return;
-    }
-    Serial.println("SD-Karte initialisiert.");
-
-    // Konfigurationsdatei laden
-    loadConfig("/config.txt");
-
-    // TFT-Initialisierung
+    // Initialize the hardware, the BMA423 sensor has been initialized internally
     tft.init();
+    Serial.begin(115200);
     Serial.println("TFT initialized");
 
     // Set rotation
     tft.setRotation(1);
+
+    // Background
     tft.fillScreen(TFT_BLACK);
     tft.setSwapBytes(true);
 
-    // Hintergrundbeleuchtung ein
-    pinMode(BACKLIGHT_PIN, OUTPUT);
-    digitalWrite(BACKLIGHT_PIN, HIGH);
+    // Image
+    tft.pushImage(0, 0, 275, 183, golf);
 
-    // Starten des Access Points oder Verbinden mit WLAN
-    if (WIFI_SSID != "" && WIFI_PASSWORD != "") {
-        connectToWiFi();
-    } else {
-        setupAccessPoint();
-    }
+    // Text Size
+    tft.setTextSize(1);
 
-    // Bild anzeigen
-    displayImageFromSD();
-}
+    // Set "cursor" at top left corner of display (0, 0) and select font 4
+    tft.setCursor(0, 0, 4);
 
-void loadConfig(const char* filename) {
-    File configFile = SD.open(filename);
-    if (!configFile) {
-        Serial.println("Fehler beim Öffnen der Konfigurationsdatei");
-        return;
-    }
+    // Set the font colour to be white with a black background
+    tft.setTextColor(TFT_BLUE);
 
-    while (configFile.available()) {
-        String line = configFile.readStringUntil('\n');
-        line.trim();
+    // Display text
+    tft.drawString("Verbinde mit OBD-II", 10, 10, 4);
+    tft.setTextColor(TFT_ORANGE);
+    tft.setTextSize(1);
+    tft.drawString("Manuel833", 50, 45, 4);
+    tft.setTextSize(1);
+    tft.setTextColor(TFT_ORANGE);
+    tft.drawString("Version", 70, 80, 4);
+    tft.drawString("1.2", 95, 100, 4);
 
-        int delimiterIndex = line.indexOf('=');
-        if (delimiterIndex == -1) continue;
+    // Initialize buttons
+    pinMode(BUTTON1PIN, INPUT_PULLUP);
+    pinMode(BUTTON2PIN, INPUT_PULLUP);
+    pinMode(BACKLIGHT_PIN, OUTPUT);  // Setzen Sie den Beleuchtungspin als Ausgang
+    digitalWrite(BACKLIGHT_PIN, HIGH); // Schaltet die Hintergrundbeleuchtung ein
 
-        String key = line.substring(0, delimiterIndex);
-        String value = line.substring(delimiterIndex + 1);
+#if LED_BUILTIN
+    pinMode(LED_BUILTIN, OUTPUT);
+    digitalWrite(LED_BUILTIN, LOW);
+#endif
 
-        if (key == "DEVICE_NAME") DEVICE_NAME = value;
-        else if (key == "OBDII_NAME") OBDII_NAME = value;
-        else if (key == "BLUETOOTH_PIN") BLUETOOTH_PIN = value;
-        else if (key == "BUTTON1PIN") BUTTON1PIN = value.toInt();
-        else if (key == "BUTTON2PIN") BUTTON2PIN = value.toInt();
-        else if (key == "BACKLIGHT_PIN") BACKLIGHT_PIN = value.toInt();
-        else if (key == "WIFI_SSID") WIFI_SSID = value;
-        else if (key == "WIFI_PASSWORD") WIFI_PASSWORD = value;
-    }
-    configFile.close();
-}
-
-void connectToWiFi() {
-    WiFi.begin(WIFI_SSID.c_str(), WIFI_PASSWORD.c_str());
-
-    Serial.print("Verbinde mit dem WLAN-Netzwerk: ");
-    Serial.println(WIFI_SSID);
-
-    unsigned long startAttemptTime = millis();
-
-    while (WiFi.status() != WL_CONNECTED && millis() - startAttemptTime < 10000) {
-        Serial.print(".");
-        delay(500);
-    }
-
-    if (WiFi.status() == WL_CONNECTED) {
-        Serial.println("\nErfolgreich verbunden!");
-        Serial.print("IP Adresse: ");
-        Serial.println(WiFi.localIP());
-        // Hier können Sie alle Aktionen starten, die nach der WLAN-Verbindung erfolgen sollen
-        initializeOBDConnection();  // OBD-Verbindung initialisieren
-    } else {
-        Serial.println("\nVerbindung fehlgeschlagen. Starte den Access Point.");
-        setupAccessPoint();
-    }
-}
-
-void setupAccessPoint() {
-    const char* apSSID = "ESP32_HOTSPOT";
-    const char* apPassword = "12345678";
-
-    WiFi.softAP(apSSID, apPassword);
-    Serial.println("Access Point gestartet");
-    Serial.print("AP IP address: ");
-    Serial.println(WiFi.softAPIP());
-
-    // Webserver einrichten
-    server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-        String html = "<form method='POST' action='/save'>";
-        html += "SSID: <input type='text' name='ssid'><br>";
-        html += "Password: <input type='password' name='password'><br>";
-        html += "<input type='submit' value='Save'>";
-        html += "</form>";
-        request->send(200, "text/html", html);
-    });
-
-    server.on("/save", HTTP_POST, [](AsyncWebServerRequest *request){
-        String ssid = request->getParam("ssid", true)->value();
-        String password = request->getParam("password", true)->value();
-
-        preferences.begin("wifi", false);
-        preferences.putString("ssid", ssid);
-        preferences.putString("password", password);
-        preferences.end();
-
-        String html = "SSID und Passwort gespeichert. ESP32 wird nun mit dem Netzwerk verbinden.";
-        request->send(200, "text/html", html);
-        
-        // Neustart nach dem Speichern der Konfiguration
-        delay(3000);
-        ESP.restart();
-    });
-
-    server.begin();
-}
-
-void initializeOBDConnection() {
     DEBUG_PORT.begin(38400);
-    SerialBT.setPin(BLUETOOTH_PIN.c_str());
-    ELM_PORT.begin(DEVICE_NAME.c_str(), true);
+    SerialBT.setPin(BLUETOOTH_PIN);
+    ELM_PORT.begin(DEVICE_NAME, true);
+
+    // Starten des Access Points
+    setupAccessPoint();
 
     // Verbindung mit OBD-II Adapter
     bool connected = false;
     for (int i = 0; i < 3; i++) {  // 3 Verbindungsversuche
-        if (ELM_PORT.connect(OBDII_NAME.c_str())) {
+        if (ELM_PORT.connect(OBDII_NAME)) {
             connected = true;
             break;
         } else {
             DEBUG_PORT.println("Verbindungsversuch mit OBD-II Adapter fehlgeschlagen, versuche erneut...");
-            tft.fillScreen(TFT_BLACK);
+            tft.pushImage(0, 0, 275, 183, golf);
             tft.setTextColor(TFT_RED);
             tft.drawString("FEHLER", 10, 10, 4);
             tft.drawString("OBDII Verbindung ", 10, 45, 4);
@@ -202,52 +117,51 @@ void initializeOBDConnection() {
 
     if (!connected) {
         DEBUG_PORT.println("Konnte keine Verbindung mit dem OBD-II Adapter herstellen - Phase 1");
-        tft.fillScreen(TFT_BLACK);
+        tft.pushImage(0, 0, 275, 183, golf);
         tft.setTextColor(TFT_RED);
         tft.drawString("FEHLER 1", 10, 10, 4);
         tft.drawString("OBDII Verbindung", 10, 45, 4);
-        while (1);
-    }
-
-    if (!myELM327.begin(ELM_PORT, true, 2000)) {
+        // Access Point bleibt trotzdem aktiv
+    } else if (!myELM327.begin(ELM_PORT, true, 2000)) {
         Serial.println("Konnte keine Verbindung mit dem OBD-II Scanner herstellen - Phase 2");
-        tft.fillScreen(TFT_BLACK);
+        tft.pushImage(0, 0, 275, 183, golf);
         tft.setTextColor(TFT_RED);
         tft.drawString("FEHLER 2", 10, 10, 4);
         tft.drawString("OBDII Verbindung", 10, 45, 4);
-        while (1);
+        // Access Point bleibt trotzdem aktiv
+    } else {
+        Serial.println("Connected to ELM327");
+        tft.pushImage(0, 0, 275, 183, golf);
+        tft.setTextSize(1);
+        tft.setTextColor(TFT_GREEN);
+        tft.drawString("OBD 2 verbunden", 10, 30, 4);
+        delay(2500);
+        tft.fillScreen(TFT_BLACK);
+
+        // Send AT command to set header
+        myELM327.sendCommand("AT SH 7e5");
+        myELM327.sendCommand("7e5");
+        Serial.println("Sent AT command to set header to 7E0");
     }
-
-    Serial.println("Connected to ELM327");
-    tft.fillScreen(TFT_BLACK);
-    tft.setTextSize(1);
-    tft.setTextColor(TFT_GREEN);
-    tft.drawString("OBD 2 verbunden", 10, 30, 4);
-    delay(2500);
-    tft.fillScreen(TFT_BLACK);
-
-    // Send AT command to set header
-    myELM327.sendCommand("AT SH 7e5");
-    myELM327.sendCommand("7e5");
-    Serial.println("Sent AT command to set header to 7E0");
 }
 
-void displayImageFromSD() {
-    golfImageFile = SD.open("/golf.bmp");
-    if (golfImageFile) {
-        tft.setCursor(0, 0);
-        int byteRead;
-        while ((byteRead = golfImageFile.read()) != -1) {
-            tft.pushColor(byteRead);
-        }
-        golfImageFile.close();
-    } else {
-        Serial.println("Bilddatei nicht geöffnet oder ungültig.");
-    }
+void setupAccessPoint() {
+
+    Serial.begin(115200);
+    WiFi.softAP(WIFI_SSID, WIFI_PASSWORD);
+    Serial.println("Access Point gestartet");
+    Serial.print("AP IP address: ");
+    Serial.println(WiFi.softAPIP());
+
+    // Webserver einrichten
+    server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
+        request->send(200, "text/html", "<h1>ESP32 is up and running</h1>");
+    });
+
+    server.begin();
 }
 
 void loop() {
-    // Ihr Hauptprogrammcode
     // Button logic for rotating the display
     static int rotation = 1; // Variable to store the current rotation
     if (digitalRead(BUTTON1PIN) == LOW) {
@@ -317,4 +231,6 @@ void loop() {
     }
 
     delay(200); // Delay between reads
+}
+
 }
